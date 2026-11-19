@@ -3,6 +3,7 @@ import * as S from './shapes.js';
 import { MAX_CIRCLE, circleRadius } from './circles.js';
 import { loadSvgbob } from './svgbob.js';
 import { encodeDoc, decodeDoc } from './share.js';
+import { recognise } from './convert.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -1061,6 +1062,70 @@ async function copyText(text, message) {
   }
 }
 
+const TAG = /\{[A-Za-z_][\w-]*\}/g;
+
+function comparableText(text) {
+  return splitLegend(text).diagram
+    .replace(TAG, (m) => ' '.repeat(m.length))
+    .split('\n').map((l) => l.trimEnd()).join('\n').replace(/\n+$/, '');
+}
+
+function legendRules() {
+  const rules = new Map();
+  for (const line of state.customLegend) {
+    const name = legendName(line);
+    if (!name || !/^[^{]*\{.*\}\s*$/.test(line)) continue;
+    rules.set(name, { fill: styleValue(line, 'fill') ?? '', stroke: styleValue(line, 'stroke') ?? '' });
+  }
+  return rules;
+}
+
+function describeCounts(shapes) {
+  const names = { rect: ['box', 'boxes'], circle: ['circle', 'circles'], diamond: ['diamond', 'diamonds'], line: ['line', 'lines'], text: ['text', 'texts'] };
+  const counts = new Map();
+  for (const s of shapes) counts.set(s.type, (counts.get(s.type) ?? 0) + 1);
+  return [...counts].map(([type, n]) => `${n} ${names[type][n === 1 ? 0 : 1]}`).join(', ');
+}
+
+function convertToShapes() {
+  if (edit) commitEditor();
+  clearTimeout(textTimer);
+  if (asciiBox.value !== documentText()) applyTextarea();
+  const before = documentText();
+  const { shapes, tagCells, usedTags } = recognise(state.raw, shapesGrid(), legendRules());
+  if (!shapes.length) {
+    toast('No shapes found among the loose characters.');
+    return;
+  }
+  const snapshot = JSON.stringify(serialize());
+  checkpoint();
+  const added = shapes.map(withId);
+  state.shapes.push(...added);
+  for (const [x, y] of tagCells) state.raw.delete(x, y);
+  const drawn = shapesGrid();
+  for (const [x, y, c] of [...state.raw]) if (c !== ' ' && drawn.get(x, y) === c) state.raw.delete(x, y);
+  const looseText = new Grid();
+  for (const [x, y, c] of state.raw) if (vis(c)) looseText.set(x, y, c);
+  const stillTagged = looseText.toText();
+  state.customLegend = state.customLegend.filter((line) => {
+    const name = legendName(line);
+    return !name || !usedTags.has(name) || stillTagged.includes(`{${name}}`);
+  });
+  if (comparableText(documentText()) !== comparableText(before)) {
+    undoStack.pop();
+    load(JSON.parse(snapshot));
+    changed();
+    toast("Converting would have changed the drawing, so nothing was converted.");
+    return;
+  }
+  state.selected = new Set(added.map((s) => s.id));
+  state.rawSel.clear();
+  setTool('select');
+  changed();
+  const loose = looseText.size;
+  toast(`Converted ${describeCounts(added)}.${loose ? ` ${loose} character${loose === 1 ? '' : 's'} left loose.` : ''}`);
+}
+
 function importText(text) {
   try {
     const doc = JSON.parse(text);
@@ -1105,6 +1170,7 @@ const actions = {
   },
   open: () => $('#file-input').click(),
   'copy-text': () => copyText(documentText(), 'Copied ASCII'),
+  convert: convertToShapes,
   'copy-md': () => copyText('```bob\n' + documentText() + '\n```', 'Copied as a Markdown code block'),
   'download-txt': () => download('diagram.bob', documentText() + '\n', 'text/plain'),
   'download-svg': async () => {
