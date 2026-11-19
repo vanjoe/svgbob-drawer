@@ -27,7 +27,7 @@ then unpkg.
 - **Text** anywhere on the canvas.
 - **Loose characters**: anything typed, pasted or imported into the text box. You can box-select and move it,
   erase it, or punch out single characters with `Alt` + eraser.
-- **To shapes**: converts loose characters into editable boxes, circles, diamonds, lines and text, including
+- **Recognize shapes**: converts loose characters into editable boxes, circles, diamonds, lines and text, including
   labels, arrowheads, dashed strokes and `{tag}` colours. A shape is only accepted if redrawing it reproduces its
   exact characters, so the drawing never changes. Anything not recognised stays as loose characters.
 - Select, move, resize with handles, duplicate, z-order, undo/redo, copy/cut/paste, and keyboard shortcuts
@@ -62,7 +62,7 @@ python3 -m http.server 8000
 | `js/shapes.js`  | Shape models and how each is drawn into the character grid          |
 | `js/grid.js`    | Sparse character grid, junction merging, text conversion            |
 | `js/circles.js` | svgbob's circle art, copied verbatim from its source                |
-| `js/convert.js` | Recognises shapes in loose ASCII for the To shapes button           |
+| `js/convert.js` | Recognises shapes in loose ASCII for the Recognize shapes button    |
 | `js/svgbob.js`  | Loads the svgbob WASM renderer                                      |
 | `vendor/`       | The vendored `svgbob-wasm` binary and its licences                  |
 | `js/share.js`   | Compresses and decompresses drawings for share links                |

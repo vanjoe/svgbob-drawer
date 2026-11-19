@@ -1363,14 +1363,28 @@ new ResizeObserver(requestDraw).observe(wrap);
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', requestDraw);
 
 
+const sampleBox = (x, y, w, text, corner, fillColor, strokeColor) =>
+  ({ type: 'rect', x, y, w, h: 3, corner, stroke: 'solid', text, fillColor, strokeColor });
+const sampleArrow = (x1, y1, x2, y2, route = 'hv', corner = 'sharp') =>
+  ({ type: 'line', x1, y1, x2, y2, route, corner, stroke: 'solid', startCap: 'none', endCap: 'arrow' });
+
 const SAMPLE = {
   shapes: [
-    { type: 'rect', x: 2, y: 1, w: 18, h: 3, corner: 'rounded', stroke: 'solid', text: 'svgbob drawer' },
-    { type: 'line', x1: 20, y1: 2, x2: 30, y2: 2, route: 'hv', corner: 'sharp', stroke: 'solid', startCap: 'none', endCap: 'arrow' },
-    { type: 'circle', x: 32, y: 1, size: 3, text: '' },
-    { type: 'line', x1: 10, y1: 4, x2: 24, y2: 8, route: 'vh', corner: 'rounded', stroke: 'dashed', startCap: 'dot', endCap: 'arrow' },
-    { type: 'diamond', x: 25, y: 6, w: 12, h: 4, text: 'ok?' },
-    { type: 'text', x: 2, y: 11, text: 'Draw on the canvas; the text on the right updates as you go.' },
+    sampleBox(14, 1, 15, 'Start', 'rounded', '#bbf7d0', '#16a34a'),
+    sampleArrow(21, 4, 21, 5),
+    sampleBox(11, 6, 21, 'Read input', 'sharp', '#bfdbfe', '#2563eb'),
+    sampleArrow(21, 9, 21, 10),
+    { type: 'diamond', x: 12, y: 11, w: 19, h: 5, text: 'Valid?' },
+    sampleArrow(21, 16, 21, 17),
+    { type: 'text', x: 23, y: 16, text: 'yes' },
+    sampleBox(11, 18, 21, 'Save result', 'sharp', '#fde68a', '#ca8a04'),
+    sampleArrow(21, 21, 21, 22),
+    sampleBox(14, 23, 15, 'End', 'rounded', '#fecaca', '#dc2626'),
+    sampleArrow(31, 13, 39, 13),
+    { type: 'text', x: 33, y: 12, text: 'no' },
+    sampleBox(40, 12, 20, 'Show error', 'sharp', '#fed7aa', '#ea580c'),
+    sampleArrow(50, 11, 32, 7, 'vh', 'rounded'),
+    { type: 'text', x: 38, y: 6, text: 'retry' },
   ],
   raw: [],
 };
