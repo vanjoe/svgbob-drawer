@@ -11,6 +11,7 @@ const canvas = $('#canvas');
 const ctx = canvas.getContext('2d');
 const wrap = $('#canvas-wrap');
 const asciiBox = $('#ascii');
+const legendBox = $('#legend');
 const editor = $('#cell-editor');
 
 const FONT = 'ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace';
@@ -160,14 +161,15 @@ function applyLegend(legend) {
     const name = tags.byId.get(s.id);
     if (name) shapesByName.set(name, [...(shapesByName.get(name) ?? []), s]);
   }
-  const custom = [];
+  const custom = new Map();
   const seen = new Set();
   for (const line of legend ?? []) {
     if (!line.trim()) continue;
     const name = legendName(line);
     const targets = name && shapesByName.get(name);
     if (!targets) {
-      custom.push(line);
+      custom.delete(name ?? line);
+      custom.set(name ?? line, line);
       continue;
     }
     seen.add(name);
@@ -183,7 +185,7 @@ function applyLegend(legend) {
     if (seen.has(name)) continue;
     for (const s of targets) s.fillColor = s.strokeColor = '';
   }
-  state.customLegend = custom;
+  state.customLegend = [...custom.values()];
 }
 
 function shapesGrid({ forDisplay = false, tags = computeTags() } = {}) {
@@ -201,8 +203,7 @@ function overlayRaw(base) {
   return out;
 }
 
-function documentText() {
-  const tags = computeTags();
+function documentText(tags = computeTags()) {
   const body = overlayRaw(shapesGrid({ tags })).toText();
   const legend = legendLines(tags);
   return legend.length ? `${body}\n\n# Legend:\n${legend.join('\n')}` : body;
@@ -216,9 +217,17 @@ function diffRaw(textGrid, base) {
 }
 
 let saveTimer = null;
-function changed({ fromTextarea = false } = {}) {
-  const text = documentText();
-  if (!fromTextarea && asciiBox.value !== text) asciiBox.value = text;
+function changed({ from = null } = {}) {
+  const tags = computeTags();
+  const text = documentText(tags);
+  if (from !== 'ascii' && asciiBox.value !== text) {
+    const { selectionStart, selectionEnd } = asciiBox;
+    asciiBox.value = text;
+    if (document.activeElement === asciiBox) asciiBox.setSelectionRange(selectionStart, selectionEnd);
+  }
+  const legend = legendLines(tags).join('\n');
+  if (from !== 'legend' && legendBox.value !== legend) legendBox.value = legend;
+  legendBox.rows = Math.min(6, Math.max(2, legendBox.value.split('\n').length));
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => store(STORAGE_KEY, serialize()), 300);
   schedulePreview();
@@ -909,19 +918,35 @@ function survivesIn(textGrid, shape) {
   return kept * 2 > total;
 }
 
-function applyTextarea() {
+function textEditCheckpoint() {
   const now = Date.now();
   if (now - lastTextEdit > 1500) checkpoint();
   lastTextEdit = now;
+}
+
+function applyTextarea() {
+  textEditCheckpoint();
+  const shown = computeTags();
   const { diagram, legend } = splitLegend(asciiBox.value);
-  applyLegend(legend);
   const textGrid = Grid.fromText(diagram);
   state.shapes = state.shapes.filter((s) => survivesIn(textGrid, s));
   state.selected = new Set(state.shapes.filter((s) => state.selected.has(s.id)).map((s) => s.id));
-  state.raw = diffRaw(textGrid, shapesGrid());
+  state.raw = diffRaw(textGrid, shapesGrid({ tags: shown }));
   state.rawSel.clear();
-  changed({ fromTextarea: true });
+  applyLegend((legend ?? []).filter((l) => !/^\s*#\s*legend\s*:?\s*$/i.test(l)));
+  const tagsChanged = JSON.stringify([...computeTags().byId]) !== JSON.stringify([...shown.byId]);
+  changed({ from: tagsChanged ? null : 'ascii' });
 }
+
+let legendTimer = null;
+legendBox.addEventListener('input', () => {
+  clearTimeout(legendTimer);
+  legendTimer = setTimeout(() => {
+    textEditCheckpoint();
+    applyLegend(legendBox.value.split('\n'));
+    changed({ from: 'legend' });
+  }, 150);
+});
 
 
 let previewTimer = null;
@@ -1223,7 +1248,9 @@ document.addEventListener('paste', (e) => {
     return;
   }
   const at = state.hover ?? { x: 1, y: 1 };
-  insertPayload({ shapes: [], raw: [...Grid.fromText(text)] }, at.x, at.y);
+  const { diagram, legend } = splitLegend(text);
+  if (legend) state.customLegend = [...state.customLegend, ...legend.filter((l) => l.trim())];
+  insertPayload({ shapes: [], raw: [...Grid.fromText(diagram)] }, at.x, at.y);
   setTool('select');
 });
 

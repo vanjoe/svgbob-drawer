@@ -178,6 +178,14 @@
         <canvas id="canvas"></canvas>
         <textarea id="cell-editor" class="cell-editor" spellcheck="false" wrap="off" hidden></textarea>
       </div>
+      <section class="legend-pane">
+        <div class="legend-head">
+          <h2>Legend</h2>
+          <span class="muted small">svgbob colour styles, also shown at the end of the ASCII. Edit here, in the ASCII, or with Fill and Outline.</span>
+        </div>
+        <textarea id="legend" class="legend-text" spellcheck="false" wrap="off" autocomplete="off" rows="2"
+          placeholder="Colour a box or circle to add an entry here, e.g.  a = { fill: #bfdbfe; stroke: #2563eb; }"></textarea>
+      </section>
       <footer class="status">
         <span id="hint"></span>
         <span id="warn" class="warn" hidden></span>
@@ -229,7 +237,7 @@
             <dt><kbd>E</kbd></dt><dd>Eraser (<kbd>Alt</kbd> punches single characters)</dd>
           </dl>
           <h3>Colours</h3>
-          <p class="small">Solid boxes and circles can take a fill and outline colour. The app writes svgbob's <code>{tag}</code> inside the shape and a <code># Legend:</code> at the bottom of the text. svgbob ignores the colour if a line joins the shape's edge, or if there's no room inside for the tag.</p>
+          <p class="small">Solid boxes and circles can take a fill and outline colour. The app writes svgbob's <code>{tag}</code> inside the shape and its style as a <code># Legend:</code> block under the ASCII. The Legend section below the canvas edits the same block. svgbob ignores the colour if a line joins the shape's edge, or if there's no room inside for the tag.</p>
         </div>
         <div>
           <h3>Editing</h3>
