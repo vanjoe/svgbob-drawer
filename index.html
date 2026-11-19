@@ -140,6 +140,35 @@
       <input id="circle-size" type="range" min="0" step="1">
       <output id="circle-size-out" class="muted"></output>
     </div>
+    <div class="prop" data-prop="fillColor">
+      <span class="prop-label">Fill</span>
+      <div class="swatches">
+        <button class="swatch none" data-value="" title="No fill" aria-label="No fill"></button>
+        <button class="swatch" data-value="#fecaca" style="--swatch: #fecaca" title="Red" aria-label="Red"></button>
+        <button class="swatch" data-value="#fed7aa" style="--swatch: #fed7aa" title="Orange" aria-label="Orange"></button>
+        <button class="swatch" data-value="#fde68a" style="--swatch: #fde68a" title="Yellow" aria-label="Yellow"></button>
+        <button class="swatch" data-value="#bbf7d0" style="--swatch: #bbf7d0" title="Green" aria-label="Green"></button>
+        <button class="swatch" data-value="#bfdbfe" style="--swatch: #bfdbfe" title="Blue" aria-label="Blue"></button>
+        <button class="swatch" data-value="#ddd6fe" style="--swatch: #ddd6fe" title="Violet" aria-label="Violet"></button>
+        <button class="swatch" data-value="#e5e7eb" style="--swatch: #e5e7eb" title="Grey" aria-label="Grey"></button>
+        <label class="swatch custom" title="Custom colour"><input type="color" aria-label="Custom colour"></label>
+      </div>
+    </div>
+    <div class="prop" data-prop="strokeColor">
+      <span class="prop-label">Outline</span>
+      <div class="swatches">
+        <button class="swatch none" data-value="" title="Default outline" aria-label="Default outline"></button>
+        <button class="swatch" data-value="#dc2626" style="--swatch: #dc2626" title="Red" aria-label="Red"></button>
+        <button class="swatch" data-value="#ea580c" style="--swatch: #ea580c" title="Orange" aria-label="Orange"></button>
+        <button class="swatch" data-value="#ca8a04" style="--swatch: #ca8a04" title="Yellow" aria-label="Yellow"></button>
+        <button class="swatch" data-value="#16a34a" style="--swatch: #16a34a" title="Green" aria-label="Green"></button>
+        <button class="swatch" data-value="#2563eb" style="--swatch: #2563eb" title="Blue" aria-label="Blue"></button>
+        <button class="swatch" data-value="#7c3aed" style="--swatch: #7c3aed" title="Violet" aria-label="Violet"></button>
+        <button class="swatch" data-value="#4b5563" style="--swatch: #4b5563" title="Grey" aria-label="Grey"></button>
+        <label class="swatch custom" title="Custom colour"><input type="color" aria-label="Custom colour"></label>
+      </div>
+    </div>
+    <span id="colour-note" class="colour-note" hidden></span>
     <span id="props-empty" class="muted"></span>
   </div>
 
@@ -199,6 +228,8 @@
             <dt><kbd>T</kbd></dt><dd>Text</dd>
             <dt><kbd>E</kbd></dt><dd>Eraser (<kbd>Alt</kbd> punches single characters)</dd>
           </dl>
+          <h3>Colours</h3>
+          <p class="small">Solid boxes and circles can take a fill and outline colour. The app writes svgbob's <code>{tag}</code> inside the shape and a <code># Legend:</code> at the bottom of the text. svgbob ignores the colour if a line joins the shape's edge, or if there's no room inside for the tag.</p>
         </div>
         <div>
           <h3>Editing</h3>

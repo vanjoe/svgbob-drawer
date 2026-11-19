@@ -34,7 +34,10 @@ const state = {
   selected: new Set(),
   rawSel: new Set(),
   tool: 'select',
-  defaults: { corner: 'sharp', stroke: 'solid', startCap: 'none', endCap: 'arrow', route: 'hv', size: 3 },
+  defaults: {
+    corner: 'sharp', stroke: 'solid', startCap: 'none', endCap: 'arrow', route: 'hv', size: 3, fillColor: '', strokeColor: '',
+  },
+  customLegend: [],
   fontSize: 15,
   preview: true,
   sideWidth: null,
@@ -64,6 +67,7 @@ function serialize() {
     v: 1,
     shapes: state.shapes.map(({ id, ...s }) => s),
     raw: [...state.raw],
+    legend: state.customLegend,
   };
 }
 
@@ -74,6 +78,8 @@ function load(doc) {
     const [x, y, c] = Array.isArray(cell) ? cell : [];
     if (Number.isInteger(x) && Number.isInteger(y) && typeof c === 'string' && c.length) state.raw.set(x, y, Array.from(c)[0]);
   }
+  state.customLegend = (Array.isArray(doc?.legend) ? doc.legend : [])
+    .filter((l) => typeof l === 'string').slice(0, 200).map((l) => l.slice(0, 500));
   state.selected.clear();
   state.rawSel.clear();
 }
@@ -100,9 +106,91 @@ function stepHistory(from, to) {
 const undo = () => stepHistory(undoStack, redoStack);
 const redo = () => stepHistory(redoStack, undoStack);
 
-function shapesGrid({ forDisplay = false } = {}) {
-  const g = S.renderShapes(state.shapes, (s) =>
-    forDisplay && s.id === state.editingId ? (s.type === 'text' ? null : { ...s, text: '' }) : s);
+function tagName(i) {
+  let name = '';
+  for (i++; i > 0; i = Math.floor(i / 26)) {
+    i--;
+    name = String.fromCharCode(97 + (i % 26)) + name;
+  }
+  return name;
+}
+
+const legendName = (line) => line.match(/^\s*([A-Za-z_][\w-]*)\s*=/)?.[1];
+
+function computeTags() {
+  const reserved = new Set(state.customLegend.map(legendName).filter(Boolean));
+  const byStyle = new Map();
+  const byId = new Map();
+  let i = 0;
+  for (const s of state.shapes) {
+    if (!S.hasColour(s)) continue;
+    const key = `${s.fillColor}|${s.strokeColor}`;
+    if (!byStyle.has(key)) {
+      let name;
+      do name = tagName(i++); while (reserved.has(name));
+      byStyle.set(key, { name, fill: s.fillColor, stroke: s.strokeColor });
+    }
+    byId.set(s.id, byStyle.get(key).name);
+  }
+  return { byId, styles: [...byStyle.values()] };
+}
+
+function legendLines(tags) {
+  const generated = tags.styles.map(({ name, fill, stroke }) =>
+    `${name} = { ${[fill && `fill: ${fill};`, stroke && `stroke: ${stroke};`].filter(Boolean).join(' ')} }`);
+  return [...generated, ...state.customLegend];
+}
+
+function splitLegend(text) {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const at = lines.findIndex((l) => /^\s*#\s*legend\s*:?\s*$/i.test(l));
+  if (at < 0) return { diagram: text, legend: null };
+  return { diagram: lines.slice(0, at).join('\n'), legend: lines.slice(at + 1) };
+}
+
+function styleValue(rule, prop) {
+  const m = rule.match(new RegExp(`[{;]\\s*${prop}\\s*:\\s*([^;}]*)`));
+  return m ? S.cssColour(m[1]) : '';
+}
+
+function applyLegend(legend) {
+  const tags = computeTags();
+  const shapesByName = new Map();
+  for (const s of state.shapes) {
+    const name = tags.byId.get(s.id);
+    if (name) shapesByName.set(name, [...(shapesByName.get(name) ?? []), s]);
+  }
+  const custom = [];
+  const seen = new Set();
+  for (const line of legend ?? []) {
+    if (!line.trim()) continue;
+    const name = legendName(line);
+    const targets = name && shapesByName.get(name);
+    if (!targets) {
+      custom.push(line);
+      continue;
+    }
+    seen.add(name);
+    if (!/^[^{]*\{.*\}\s*$/.test(line)) continue;
+    const fill = styleValue(line, 'fill');
+    const stroke = styleValue(line, 'stroke');
+    for (const s of targets) {
+      if (fill !== null) s.fillColor = fill;
+      if (stroke !== null) s.strokeColor = stroke;
+    }
+  }
+  for (const [name, targets] of shapesByName) {
+    if (seen.has(name)) continue;
+    for (const s of targets) s.fillColor = s.strokeColor = '';
+  }
+  state.customLegend = custom;
+}
+
+function shapesGrid({ forDisplay = false, tags = computeTags() } = {}) {
+  const g = S.renderShapes(state.shapes, (s) => {
+    const t = tags.byId.has(s.id) ? { ...s, tag: tags.byId.get(s.id) } : s;
+    return forDisplay && s.id === state.editingId ? (s.type === 'text' ? null : { ...t, text: '' }) : t;
+  });
   if (forDisplay && state.draft) S.drawShape(g, state.draft);
   return g;
 }
@@ -113,7 +201,12 @@ function overlayRaw(base) {
   return out;
 }
 
-const documentText = () => overlayRaw(shapesGrid()).toText();
+function documentText() {
+  const tags = computeTags();
+  const body = overlayRaw(shapesGrid({ tags })).toText();
+  const legend = legendLines(tags);
+  return legend.length ? `${body}\n\n# Legend:\n${legend.join('\n')}` : body;
+}
 
 function diffRaw(textGrid, base) {
   const raw = new Grid();
@@ -201,7 +294,7 @@ function draw() {
   fitCanvas(g);
   const C = {
     bg: cssVar('--canvas-bg'), grid: cssVar('--grid'), ink: cssVar('--ink'), rawInk: cssVar('--raw-ink'),
-    accent: cssVar('--accent'), warn: cssVar('--warn'), selTint: cssVar('--sel-tint'), hover: cssVar('--hover'),
+    accent: cssVar('--accent'), warn: cssVar('--warn'), muted: cssVar('--muted'), selTint: cssVar('--sel-tint'), hover: cssVar('--hover'),
   };
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = C.bg;
@@ -223,6 +316,31 @@ function draw() {
     ctx.fillRect(state.hover.x * cellW, state.hover.y * cellH, cellW, cellH);
   }
 
+  const tags = computeTags();
+  const strokeInk = new Map();
+  const tagCells = new Set();
+  for (const s of state.shapes) {
+    if (!S.hasColour(s)) continue;
+    const b = S.bbox(s);
+    if (s.fillColor) {
+      ctx.globalAlpha = 0.45;
+      ctx.fillStyle = s.fillColor;
+      if (s.type === 'rect') ctx.fillRect((b.x + 0.5) * cellW, (b.y + 0.5) * cellH, (b.w - 1) * cellW, (b.h - 1) * cellH);
+      else {
+        ctx.beginPath();
+        ctx.ellipse((b.x + b.w / 2) * cellW, (b.y + b.h / 2) * cellH, (b.w / 2 - 0.4) * cellW, (b.h / 2 - 0.3) * cellH, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    if (s.strokeColor) {
+      for (const [x, y, c] of S.cellsOf({ ...s, text: '' })) if (vis(c)) strokeInk.set(Grid.key(x, y), s.strokeColor);
+    }
+    const name = tags.byId.get(s.id);
+    const spot = S.tagSpot(s, name.length + 2);
+    if (spot) for (let i = 0; i < name.length + 2; i++) tagCells.add(Grid.key(spot.x + i, spot.y));
+  }
+
   const highlighted = cellSetOf(state.draft ? [...selectedShapes(), state.draft] : selectedShapes());
   const flagged = cellSetOf(state.shapes.filter((s) => state.unrecognized.has(s.id)));
   ctx.font = `${state.fontSize}px ${FONT}`;
@@ -233,6 +351,8 @@ function draw() {
     const raw = state.raw.get(x, y);
     if (highlighted.has(k) || state.rawSel.has(k)) ctx.fillStyle = C.accent;
     else if (flagged.has(k)) ctx.fillStyle = C.warn;
+    else if (tagCells.has(k)) ctx.fillStyle = C.muted;
+    else if (strokeInk.has(k)) ctx.fillStyle = strokeInk.get(k);
     else ctx.fillStyle = raw ? C.rawInk : C.ink;
     ctx.fillText(c, x * cellW, y * cellH + cellH / 2 + 1);
   }
@@ -690,6 +810,21 @@ function currentProp(prop) {
   return state.defaults[prop];
 }
 
+function colourNote() {
+  if (state.tool === 'rect' && state.defaults.stroke === 'dashed') return "svgbob can't colour dashed boxes.";
+  if (state.tool !== 'select') return '';
+  const targets = propTargets('fillColor');
+  const blocked = targets.find((s) => !S.canColour(s));
+  if (blocked?.type === 'rect') {
+    return blocked.stroke === 'dashed' ? "svgbob can't colour dashed boxes." : 'Boxes must be at least 5×3 to take a colour.';
+  }
+  if (blocked) return 'Circles this small have no room for a colour tag.';
+  if (targets.some((s) => S.hasColour(s) && !S.tagSpot(s, 3))) {
+    return 'No room inside for the colour tag. Make the shape bigger or shorten its label.';
+  }
+  return '';
+}
+
 function refreshProps() {
   const types = state.tool === 'select' ? new Set(selectedShapes().map((s) => s.type)) : new Set([state.tool]);
   let any = false;
@@ -705,7 +840,16 @@ function refreshProps() {
       $('#circle-size').value = value;
       $('#circle-size-out').textContent = `r = ${circleRadius(value)}`;
     }
+    const custom = el.querySelector('.swatch.custom');
+    if (custom) {
+      const inPalette = [...el.querySelectorAll('button[data-value]')].some((b) => b.dataset.value === value);
+      custom.setAttribute('aria-pressed', String(!inPalette));
+      if (/^#[0-9a-f]{6}$/i.test(value)) custom.querySelector('input').value = value;
+    }
   }
+  const note = $('#colour-note');
+  note.textContent = colourNote();
+  note.hidden = !note.textContent || $('.prop[data-prop=fillColor]').hidden;
   const empty = $('#props-empty');
   empty.hidden = any;
   empty.textContent = state.tool === 'select' && !state.selected.size
@@ -744,6 +888,9 @@ for (const el of $$('.prop')) {
 }
 $('#circle-size').max = MAX_CIRCLE;
 $('#circle-size').addEventListener('input', (e) => setProp('size', Number(e.target.value)));
+for (const input of $$('.swatch.custom input')) {
+  input.addEventListener('input', (e) => setProp(e.target.closest('.prop').dataset.prop, e.target.value));
+}
 
 
 let textTimer = null;
@@ -766,7 +913,9 @@ function applyTextarea() {
   const now = Date.now();
   if (now - lastTextEdit > 1500) checkpoint();
   lastTextEdit = now;
-  const textGrid = Grid.fromText(asciiBox.value);
+  const { diagram, legend } = splitLegend(asciiBox.value);
+  applyLegend(legend);
+  const textGrid = Grid.fromText(diagram);
   state.shapes = state.shapes.filter((s) => survivesIn(textGrid, s));
   state.selected = new Set(state.shapes.filter((s) => state.selected.has(s.id)).map((s) => s.id));
   state.raw = diffRaw(textGrid, shapesGrid());
@@ -797,27 +946,48 @@ function circleOrigin(render, size) {
   return circleOrigins.get(size);
 }
 
-function checkCircles(render, svg) {
+function checkRender(render, svg) {
   const found = svgCircleCentres(svg);
-  const missing = new Set();
+  const circles = new Set();
+  const colours = new Set();
+  const tags = computeTags();
+  const leftoverText = [...new DOMParser().parseFromString(svg, 'image/svg+xml').querySelectorAll('text')]
+    .filter((t) => t.textContent.includes('{'))
+    .map((t) => ({ text: t.textContent, col: Number(t.getAttribute('x')) / 8, row: Number(t.getAttribute('y')) / 16 }));
+  const tagIgnored = (name, spot) => leftoverText.some((t) => t.text.includes(`{${name}}`)
+    && spot.x >= t.col - 1 && spot.x <= t.col + t.text.length + 1 && Math.abs(t.row - spot.y - 0.5) <= 1);
   for (const s of state.shapes) {
-    if (s.type !== 'circle') continue;
-    const [ox, oy] = circleOrigin(render, s.size);
-    const cx = ox + s.x * 8, cy = oy + s.y * 16;
-    if (!found.some(([x, y]) => Math.abs(x - cx) < 1 && Math.abs(y - cy) < 1)) missing.add(s.id);
+    if (s.type === 'circle') {
+      const [ox, oy] = circleOrigin(render, s.size);
+      const cx = ox + s.x * 8, cy = oy + s.y * 16;
+      if (!found.some(([x, y]) => Math.abs(x - cx) < 1 && Math.abs(y - cy) < 1)) circles.add(s.id);
+    }
+    const name = tags.byId.get(s.id);
+    if (!name) continue;
+    const spot = S.tagSpot(s, name.length + 2);
+    if (!spot || tagIgnored(name, spot)) colours.add(s.id);
   }
-  setUnrecognized(missing);
+  setIssues(circles, colours);
 }
 
-function setUnrecognized(ids) {
-  const same = ids.size === state.unrecognized.size && [...ids].every((id) => state.unrecognized.has(id));
+const plural = (n, one, many) => (n === 1 ? one : many.replace('#', n));
+
+function setIssues(circles = new Set(), colours = new Set()) {
+  const problems = [
+    circles.size && plural(circles.size, "svgbob doesn't see the highlighted circle as a circle.",
+      "svgbob doesn't see # highlighted circles as circles."),
+    colours.size && plural(colours.size, "svgbob won't colour the highlighted shape.", "svgbob won't colour # highlighted shapes."),
+  ].filter(Boolean);
+  const text = problems.length
+    ? `${problems.join(' ')} Leave a one-cell gap around the outline, and room inside for the label${colours.size ? ' and colour tag' : ''}.`
+    : '';
+  const ids = new Set([...circles, ...colours]);
+  const warn = $('#warn');
+  const same = text === warn.textContent && ids.size === state.unrecognized.size && [...ids].every((id) => state.unrecognized.has(id));
   if (same) return;
   state.unrecognized = ids;
-  const warn = $('#warn');
-  warn.hidden = !ids.size;
-  warn.textContent = ids.size === 1
-    ? "svgbob doesn't see the highlighted circle as a circle. Leave a one-cell gap around it, or shorten its label."
-    : `svgbob doesn't see ${ids.size} highlighted circles as circles. Leave a one-cell gap around them, or shorten their labels.`;
+  warn.textContent = text;
+  warn.hidden = !text;
   requestDraw();
 }
 
@@ -834,13 +1004,13 @@ async function renderPreview() {
     img.hidden = true;
     status.textContent = 'Nothing to preview yet.';
     status.hidden = false;
-    setUnrecognized(new Set());
+    setIssues();
     return;
   }
   try {
     const render = await loadSvgbob();
     const svg = render(text);
-    checkCircles(render, svg);
+    checkRender(render, svg);
     if (!state.preview) return;
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     previewUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
@@ -851,7 +1021,7 @@ async function renderPreview() {
     img.hidden = true;
     status.hidden = false;
     status.textContent = `Couldn't load the svgbob renderer (${err.message}). The text output still works.`;
-    setUnrecognized(new Set());
+    setIssues();
   }
 }
 
@@ -903,10 +1073,12 @@ function importText(text) {
     }
   } catch {}
   checkpoint();
+  const { diagram, legend } = splitLegend(text);
   state.shapes = [];
   state.selected.clear();
   state.rawSel.clear();
-  state.raw = Grid.fromText(text);
+  state.customLegend = (legend ?? []).filter((l) => l.trim());
+  state.raw = Grid.fromText(diagram);
   changed();
   toast('Text imported. Drag-select regions to move them.');
 }
@@ -926,6 +1098,7 @@ const actions = {
     checkpoint();
     state.shapes = [];
     state.raw = new Grid();
+    state.customLegend = [];
     state.selected.clear();
     state.rawSel.clear();
     changed();

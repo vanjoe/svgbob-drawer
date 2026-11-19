@@ -20,6 +20,10 @@ then unpkg.
 - **Lines and arrows**: across-then-down or down-then-across elbows (press `F` to flip), or straight lines that
   snap to horizontal, vertical or diagonal. Each end can be plain, an arrow, `o`, `O` or `*`. Corners can be
   sharp or rounded, and strokes solid or dashed. Crossings and junctions merge into `+`.
+- **Colours**: fill and outline colours for solid boxes and circles, from swatches or a custom picker. The app
+  writes svgbob's `{tag}` inside the shape and a `# Legend:` block of CSS at the bottom of the text, and edits to
+  that legend in the text box flow back to the shapes. A coloured shape that svgbob would ignore (a line joining
+  its edge, or no room for the tag) is highlighted in red.
 - **Text** anywhere on the canvas.
 - **Loose characters**: anything typed, pasted or imported into the text box. You can box-select and move it,
   erase it, or punch out single characters with `Alt` + eraser.

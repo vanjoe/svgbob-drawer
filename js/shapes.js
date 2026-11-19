@@ -13,7 +13,16 @@ export const PROP_TYPES = {
   startCap: ['line'],
   endCap: ['line'],
   size: ['circle'],
+  fillColor: ['rect', 'circle'],
+  strokeColor: ['rect', 'circle'],
 };
+
+export function canColour(s) {
+  if (s.type === 'rect') return s.stroke !== 'dashed' && s.w >= 5 && s.h >= 3;
+  return s.type === 'circle' && s.size >= 3;
+}
+
+export const hasColour = (s) => canColour(s) && !!(s.fillColor || s.strokeColor);
 
 const CAP_CHAR = { circle: 'o', bigcircle: 'O', dot: '*' };
 
@@ -81,8 +90,12 @@ function drawCircle(g, s) {
       if (c !== ' ') g.merge(s.x + i, s.y + r, c);
     });
   });
-  const { w, h } = circleSize(s.size);
-  drawLabel(g, s.text, s.x, s.y, w, h);
+  if (!s.text) return;
+  const art = CIRCLES[s.size];
+  const widths = art.map((line) => line.trimEnd().length - line.search(/\S/));
+  const widest = widths.indexOf(Math.max(...widths));
+  const lines = s.text.split('\n').length;
+  drawLabel(g, s.text, s.x, s.y + widest - Math.floor((lines - 1) / 2), circleSize(s.size).w, lines);
 }
 
 function drawText(g, s) {
@@ -152,6 +165,40 @@ const DRAW = { rect: drawRect, diamond: drawDiamond, circle: drawCircle, text: d
 
 export function drawShape(g, s) {
   DRAW[s.type](g, s);
+  if (!s.tag) return;
+  const tag = `{${s.tag}}`;
+  const spot = tagSpot(s, tag.length);
+  if (spot) Array.from(tag).forEach((c, i) => g.set(spot.x + i, spot.y, c));
+}
+
+function interiorRows(s) {
+  if (s.type === 'rect') {
+    return Array.from({ length: Math.max(0, s.h - 2) }, (_, r) => ({ y: s.y + 1 + r, from: s.x + 1, to: s.x + s.w - 2 }));
+  }
+  const art = CIRCLES[s.size];
+  const middle = (art.length - 1) / 2;
+  return art
+    .map((line, r) => ({ y: s.y + r, from: s.x + line.search(/\S/) + 1, to: s.x + line.trimEnd().length - 2, d: Math.abs(r - middle) }))
+    .filter((row) => row.to >= row.from)
+    .sort((a, b) => a.d - b.d);
+}
+
+export function tagSpot(s, len) {
+  if (s.type !== 'rect' && s.type !== 'circle') return null;
+  const own = cellsOf({ ...s, tag: undefined });
+  for (const { y, from, to } of interiorRows(s)) {
+    for (let x = from; x + len - 1 <= to; x++) {
+      let free = true;
+      for (let i = Math.max(from, x - 1); i <= Math.min(to, x + len); i++) {
+        if (vis(own.get(i, y))) {
+          free = false;
+          break;
+        }
+      }
+      if (free) return { x, y };
+    }
+  }
+  return null;
 }
 
 export function renderShapes(shapes, transform = (s) => s) {
@@ -268,7 +315,10 @@ export function circleCenter(s) {
 export function createShape(type, a, b, d, dragged) {
   switch (type) {
     case 'rect':
-      return { type, ...boxFrom(type, a.x, a.y, b.x, b.y), corner: d.corner, stroke: d.stroke, text: '' };
+      return {
+        type, ...boxFrom(type, a.x, a.y, b.x, b.y), corner: d.corner, stroke: d.stroke, text: '',
+        fillColor: d.fillColor, strokeColor: d.strokeColor,
+      };
     case 'diamond':
       return { type, ...boxFrom(type, a.x, a.y, b.x, b.y), text: '' };
     case 'line':
@@ -278,7 +328,7 @@ export function createShape(type, a, b, d, dragged) {
       });
     case 'circle': {
       const size = dragged ? pickCircle(Math.abs(b.x - a.x) * 2 + 1, Math.abs(b.y - a.y) * 2 + 1) : d.size;
-      return centerCircle({ type, size, text: '' }, a.x, a.y);
+      return centerCircle({ type, size, text: '', fillColor: d.fillColor, strokeColor: d.strokeColor }, a.x, a.y);
     }
   }
 }
@@ -314,6 +364,12 @@ const int = (v, lo = 0, hi = 4000) => Math.min(hi, Math.max(lo, Math.round(Numbe
 const oneOf = (v, list) => (list.includes(v) ? v : list[0]);
 const str = (v) => (typeof v === 'string' ? v.slice(0, 10000) : '');
 
+export function cssColour(v) {
+  if (typeof v !== 'string') return null;
+  const c = v.trim();
+  return /^(#[0-9a-f]{3}|#[0-9a-f]{4}|#[0-9a-f]{6}|#[0-9a-f]{8}|[a-z]{3,20}|(rgb|hsl)a?\([\d\s.,%]+\))$/i.test(c) ? c : null;
+}
+
 export function sanitizeShape(s) {
   if (!s || typeof s !== 'object') return null;
   switch (s.type) {
@@ -321,13 +377,17 @@ export function sanitizeShape(s) {
       return {
         type: 'rect', x: int(s.x), y: int(s.y), w: int(s.w, 2), h: int(s.h, 2),
         corner: oneOf(s.corner, CORNERS), stroke: oneOf(s.stroke, STROKES), text: str(s.text),
+        fillColor: cssColour(s.fillColor) ?? '', strokeColor: cssColour(s.strokeColor) ?? '',
       };
     case 'diamond': {
       const [w, h] = normSize('diamond', int(s.w, 2), int(s.h, 2));
       return { type: 'diamond', x: int(s.x), y: int(s.y), w, h, text: str(s.text) };
     }
     case 'circle':
-      return { type: 'circle', x: int(s.x), y: int(s.y), size: int(s.size, 0, MAX_CIRCLE), text: str(s.text) };
+      return {
+        type: 'circle', x: int(s.x), y: int(s.y), size: int(s.size, 0, MAX_CIRCLE), text: str(s.text),
+        fillColor: cssColour(s.fillColor) ?? '', strokeColor: cssColour(s.strokeColor) ?? '',
+      };
     case 'text': {
       const text = str(s.text);
       return text ? { type: 'text', x: int(s.x), y: int(s.y), text } : null;
