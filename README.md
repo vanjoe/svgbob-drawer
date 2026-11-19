@@ -4,10 +4,12 @@ A browser tool for drawing [svgbob](https://github.com/ivanceras/svgbob) diagram
 character-grid canvas, and the ASCII source updates live in a text box beside it. You can also edit the text
 directly, and those changes show up on the canvas. A live svgbob SVG preview sits below the text.
 
-It is a static site with no build step. The svgbob renderer used for the preview and for SVG export is
-[`svgbob-wasm`](https://github.com/agoose77/svgbob-wasm) 1.0.0, vendored in `vendor/svgbob-wasm/` under its
-MIT/Apache-2.0 licences. If that file can't be loaded, the app falls back to the same package on jsDelivr,
-then unpkg.
+It is a static site with no build step, written as plain scripts rather than ES modules so it also runs when
+you open `index.html` straight from disk. The svgbob renderer used for the preview and for SVG export is
+[`svgbob-wasm`](https://github.com/agoose77/svgbob-wasm) 1.0.0 under its MIT/Apache-2.0 licences. Its
+`svgbob_wasm_bg.wasm` (SHA-256 `fbb0789a16f281141baac34cae11564f8b993812e2ef38bef477ee190e8d576c`) is embedded as
+base64 in `vendor/svgbob-wasm/svgbob_wasm.js`, because browsers won't `fetch()` local files. If that script
+can't be loaded, the app falls back to the same package on jsDelivr, then unpkg.
 
 ## Features
 
@@ -38,7 +40,8 @@ then unpkg.
 
 ## Run locally
 
-ES modules don't load from `file://`, so serve the folder:
+Open `index.html` in any modern browser; it works from `file://` in Firefox and Chrome. Serving the folder works
+too:
 
 ```sh
 python3 -m http.server 8000
@@ -64,5 +67,5 @@ python3 -m http.server 8000
 | `js/circles.js` | svgbob's circle art, copied verbatim from its source                |
 | `js/convert.js` | Recognises shapes in loose ASCII for the Recognize shapes button    |
 | `js/svgbob.js`  | Loads the svgbob WASM renderer                                      |
-| `vendor/`       | The vendored `svgbob-wasm` binary and its licences                  |
+| `vendor/`       | The vendored `svgbob-wasm` renderer (as base64 JS) and its licences |
 | `js/share.js`   | Compresses and decompresses drawings for share links                |
