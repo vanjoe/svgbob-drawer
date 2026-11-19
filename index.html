@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>svgbob drawer</title>
+  <meta name="description" content="Draw svgbob diagrams on a character canvas and get the ASCII source live.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563eb'/%3E%3Cpath d='M8 10h16v12H8z' fill='none' stroke='white' stroke-width='2.5'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="toolbar">
+    <h1 class="brand">svgbob<span>drawer</span></h1>
+
+    <div class="group" role="toolbar" aria-label="Tools">
+      <button class="tool" data-tool="select" title="Select / move (V)" aria-label="Select">
+        <svg viewBox="0 0 24 24"><path d="M5 3l13 8-5.5 1.5L10 18z"/></svg>
+      </button>
+      <button class="tool" data-tool="rect" title="Rectangle (R)" aria-label="Rectangle">
+        <svg viewBox="0 0 24 24"><rect x="3.5" y="6" width="17" height="12" rx="1"/></svg>
+      </button>
+      <button class="tool" data-tool="diamond" title="Diamond (D)" aria-label="Diamond">
+        <svg viewBox="0 0 24 24"><path d="M12 3l9 9-9 9-9-9z"/></svg>
+      </button>
+      <button class="tool" data-tool="circle" title="Circle (C)" aria-label="Circle">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>
+      </button>
+      <button class="tool" data-tool="line" title="Line / arrow (L)" aria-label="Line">
+        <svg viewBox="0 0 24 24"><path d="M4 7h11v12M11.5 15.5L15 19l3.5-3.5"/></svg>
+      </button>
+      <button class="tool" data-tool="text" title="Text (T)" aria-label="Text">
+        <svg viewBox="0 0 24 24"><path d="M5 7V5h14v2M12 5v14M9 19h6"/></svg>
+      </button>
+      <button class="tool" data-tool="eraser" title="Eraser (E)" aria-label="Eraser">
+        <svg viewBox="0 0 24 24"><path d="M14.5 4.5l5 5L10 19H5.5l-2-2zM8 10l6 6M10 19h10"/></svg>
+      </button>
+    </div>
+
+    <div class="group">
+      <button class="icon" data-action="undo" title="Undo (Ctrl+Z)" aria-label="Undo">
+        <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3"/></svg>
+      </button>
+      <button class="icon" data-action="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
+        <svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h3"/></svg>
+      </button>
+      <button class="icon" data-action="duplicate" title="Duplicate (Ctrl+D)" aria-label="Duplicate">
+        <svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M16 8V5.5A1.5 1.5 0 0014.5 4h-9A1.5 1.5 0 004 5.5v9A1.5 1.5 0 005.5 16H8"/></svg>
+      </button>
+      <button class="icon" data-action="front" title="Bring to front" aria-label="Bring to front">
+        <svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+      </button>
+      <button class="icon" data-action="back" title="Send to back" aria-label="Send to back">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+      </button>
+      <button class="icon" data-action="delete" title="Delete selection (Del)" aria-label="Delete">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13"/></svg>
+      </button>
+    </div>
+
+    <div class="group zoom">
+      <button class="icon" data-action="zoom-out" title="Zoom out (Ctrl+-)" aria-label="Zoom out">
+        <svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg>
+      </button>
+      <span id="zoom-label" class="zoom-label">100%</span>
+      <button class="icon" data-action="zoom-in" title="Zoom in (Ctrl+=)" aria-label="Zoom in">
+        <svg viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></svg>
+      </button>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="group">
+      <button class="text-btn" data-action="open" title="Open a .txt/.bob file or a saved project">Open</button>
+      <details class="menu">
+        <summary class="text-btn">Export</summary>
+        <div class="menu-items">
+          <button data-action="copy-text">Copy ASCII</button>
+          <button data-action="copy-md">Copy as Markdown <code>```bob</code></button>
+          <button data-action="share">Copy share link</button>
+          <hr>
+          <button data-action="download-txt">Download .bob text</button>
+          <button data-action="download-svg">Download .svg</button>
+          <button data-action="download-json">Save project (.json, keeps shapes editable)</button>
+          <hr>
+          <button data-action="clear" class="danger">Clear drawing</button>
+        </div>
+      </details>
+      <button class="icon" data-action="help" title="Help and shortcuts (?)" aria-label="Help">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-1 .7-1.5 1.2-1.5 2.5M12 17h.01"/></svg>
+      </button>
+    </div>
+    <input id="file-input" type="file" accept=".txt,.bob,.md,.json,text/plain,application/json" hidden>
+  </header>
+
+  <div id="props" class="props">
+    <div class="prop" data-prop="corner">
+      <span class="prop-label">Corners</span>
+      <div class="seg">
+        <button data-value="sharp" title="Sharp corners"><code>+</code>Sharp</button>
+        <button data-value="rounded" title="Rounded corners"><code>.</code>Rounded</button>
+      </div>
+    </div>
+    <div class="prop" data-prop="stroke">
+      <span class="prop-label">Stroke</span>
+      <div class="seg">
+        <button data-value="solid" title="Solid line"><code>---</code>Solid</button>
+        <button data-value="dashed" title="Dashed line (- - - and :)"><code>- -</code>Dashed</button>
+      </div>
+    </div>
+    <div class="prop" data-prop="route">
+      <span class="prop-label">Path</span>
+      <div class="seg">
+        <button data-value="hv" title="Horizontal first, then vertical (F flips)"><code>─┐</code>Across, down</button>
+        <button data-value="vh" title="Vertical first, then horizontal (F flips)"><code>└─</code>Down, across</button>
+        <button data-value="straight" title="Straight: snaps to horizontal, vertical or diagonal"><code>/</code>Straight</button>
+      </div>
+    </div>
+    <div class="prop" data-prop="startCap">
+      <span class="prop-label">Start</span>
+      <div class="seg">
+        <button data-value="none" title="No marker"><code>—</code></button>
+        <button data-value="arrow" title="Arrow"><code>&lt;</code></button>
+        <button data-value="circle" title="Small circle"><code>o</code></button>
+        <button data-value="bigcircle" title="Big circle"><code>O</code></button>
+        <button data-value="dot" title="Filled dot"><code>*</code></button>
+      </div>
+    </div>
+    <div class="prop" data-prop="endCap">
+      <span class="prop-label">End</span>
+      <div class="seg">
+        <button data-value="none" title="No marker"><code>—</code></button>
+        <button data-value="arrow" title="Arrow"><code>&gt;</code></button>
+        <button data-value="circle" title="Small circle"><code>o</code></button>
+        <button data-value="bigcircle" title="Big circle"><code>O</code></button>
+        <button data-value="dot" title="Filled dot"><code>*</code></button>
+      </div>
+    </div>
+    <div class="prop" data-prop="size">
+      <label class="prop-label" for="circle-size">Circle size</label>
+      <input id="circle-size" type="range" min="0" step="1">
+      <output id="circle-size-out" class="muted"></output>
+    </div>
+    <span id="props-empty" class="muted"></span>
+  </div>
+
+  <main class="workspace">
+    <section class="canvas-pane">
+      <div id="canvas-wrap" class="canvas-wrap">
+        <canvas id="canvas"></canvas>
+        <textarea id="cell-editor" class="cell-editor" spellcheck="false" wrap="off" hidden></textarea>
+      </div>
+      <footer class="status">
+        <span id="hint"></span>
+        <span id="warn" class="warn" hidden></span>
+        <span id="coords" class="coords"></span>
+      </footer>
+    </section>
+
+    <div id="splitter" class="splitter" role="separator" aria-orientation="vertical" title="Drag to resize"></div>
+
+    <aside class="side">
+      <section class="panel text-panel">
+        <div class="panel-head">
+          <h2>ASCII</h2>
+          <span class="muted small">Edit freely: changes show on the canvas</span>
+          <button class="text-btn small" data-action="copy-text">Copy</button>
+        </div>
+        <textarea id="ascii" class="ascii" spellcheck="false" wrap="off" autocomplete="off"
+          placeholder="Draw on the canvas, or type or paste svgbob ASCII here."></textarea>
+      </section>
+      <section class="panel preview-panel">
+        <div class="panel-head">
+          <h2>svgbob preview</h2>
+          <label class="switch"><input id="preview-toggle" type="checkbox"> Show</label>
+        </div>
+        <div id="preview-body" class="preview-body">
+          <img id="preview-img" alt="svgbob rendering of the diagram" hidden>
+          <p id="preview-status" class="muted">Loading the svgbob renderer…</p>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <dialog id="help" class="help">
+    <form method="dialog">
+      <h2>svgbob drawer</h2>
+      <p>Shapes you draw are written out as <a href="https://github.com/ivanceras/svgbob" target="_blank" rel="noopener">svgbob</a> ASCII in the text box. You can also type straight into the text box. Characters you add there, or import or paste, are loose characters: they show in a warmer colour and can be box-selected and moved like shapes.</p>
+      <div class="help-grid">
+        <div>
+          <h3>Tools</h3>
+          <dl>
+            <dt><kbd>V</kbd></dt><dd>Select, move, resize with handles</dd>
+            <dt><kbd>R</kbd></dt><dd>Rectangle</dd>
+            <dt><kbd>D</kbd></dt><dd>Diamond (wider makes a hexagon)</dd>
+            <dt><kbd>C</kbd></dt><dd>Circle in svgbob's fixed sizes</dd>
+            <dt><kbd>L</kbd></dt><dd>Line or arrow</dd>
+            <dt><kbd>T</kbd></dt><dd>Text</dd>
+            <dt><kbd>E</kbd></dt><dd>Eraser (<kbd>Alt</kbd> punches single characters)</dd>
+          </dl>
+        </div>
+        <div>
+          <h3>Editing</h3>
+          <dl>
+            <dt><kbd>Enter</kbd> / double-click</dt><dd>Edit a text or shape label</dd>
+            <dt><kbd>F</kbd></dt><dd>Flip a line's elbow</dd>
+            <dt><kbd>←↑→↓</kbd></dt><dd>Nudge (<kbd>Shift</kbd> moves 5)</dd>
+            <dt><kbd>Del</kbd></dt><dd>Delete selection</dd>
+            <dt><kbd>Ctrl</kbd>+<kbd>C</kbd> <kbd>X</kbd> <kbd>V</kbd></dt><dd>Copy, cut, paste (pasting outside text pastes at the cursor)</dd>
+            <dt><kbd>Ctrl</kbd>+<kbd>D</kbd></dt><dd>Duplicate</dd>
+            <dt><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Shift</kbd></dt><dd>Undo / redo</dd>
+            <dt><kbd>Ctrl</kbd>+<kbd>A</kbd></dt><dd>Select everything</dd>
+            <dt><kbd>Ctrl</kbd>+wheel</dt><dd>Zoom</dd>
+            <dt><kbd>Esc</kbd></dt><dd>Cancel, back to Select, deselect</dd>
+          </dl>
+        </div>
+      </div>
+      <p class="muted small">Your drawing autosaves in this browser. Use Export → Save project to keep shapes editable elsewhere, or Copy share link to send it to someone.</p>
+      <div class="help-actions"><button class="text-btn primary">Close</button></div>
+    </form>
+  </dialog>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
